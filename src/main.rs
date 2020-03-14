@@ -1,8 +1,9 @@
 use tree_sitter::{Parser, Language, Node};
-use std::path::{Path};
+use std::path::{Path, PathBuf};
 use std::env;
 use glob::glob;
 use std::fs::metadata;
+use rayon::prelude::*;
 
 extern "C" { fn tree_sitter_clojure() -> Language; }
 
@@ -34,7 +35,11 @@ fn print_reify_usage_from_node(node: Node, bytes: &[u8]) {
     }
 }
 
-fn print_reify_usage_from_file_path(parser: &mut Parser, path: &Path) {
+fn print_reify_usage_from_file_path(path: &Path) {
+    let language: Language = unsafe { tree_sitter_clojure() };
+    let mut parser = Parser::new();
+    parser.set_language(language).unwrap();
+
     let contents = std::fs::read_to_string(path).unwrap();
     let bytes = contents.as_bytes();
     let tree = parser.parse(&bytes, None).unwrap();
@@ -54,21 +59,18 @@ fn paths_from_arg(arg: &String) -> glob::Paths {
 }
 
 fn main() {
-    let language = unsafe { tree_sitter_clojure() };
-    let mut parser = Parser::new();
-    parser.set_language(language).unwrap();
-
     for arg in env::args().skip(1) {
-        for entry in paths_from_arg(&arg) {
+        let paths: Vec<Result<PathBuf,_>> = paths_from_arg(&arg).collect();
+        paths.into_par_iter().for_each(|entry| {
             match entry {
                 Ok(path) => {
                     let path = path.as_path();
                     if path.is_file() {
-                        print_reify_usage_from_file_path(&mut parser, path);
+                        print_reify_usage_from_file_path(path);
                     }
                 },
-                Err(e) => panic!(e)
+                Err(e) => panic!(format!("Unexpected error while analyzing {}", e))
             }
-        }
+        });
     }
 }
