@@ -1,20 +1,23 @@
-# find-reify-usage
+# analyze-reify
 
-This project finds reified interfaces and protocols in Clojure files provided
-via the command line. It is implemented using
+This project analyzes [Clojure](http://clojure.org/) code for occurrences of
+`reify` and lists the reified interfaces and protocols. It is implemented using
 [tree-sitter-clojure](https://github.com/sogaiu/tree-sitter-clojure) and Rust.
 
-## Status
+## Background
 
 This is more a proof of concept than a public facing tool, although it does
 solve a real problem for me. I wanted to know the most popular reified
 interfaces so I could decide if it made sense supporting `reify` in
-[babashka](https://github.com/borkdude/babashka/).
+[babashka](https://github.com/borkdude/babashka/). Also I am curious about both
+[Rust](https://www.rust-lang.org/) and
+[tree-sitter](https://github.com/tree-sitter/) so this seemed like a nice
+oppurtunity to combine the two.
 
 ## Build
 
 Execute `script/build`. You will need `npm` and `cargo`.
-This will create a `find-reify-usage` binary in `target/release`.
+This will create a `analyze-reify` binary in `target/release`.
 
 To install the tool on your system:
 
@@ -24,8 +27,11 @@ $ cargo install --path .
 
 ## Usage
 
+Provide multiple paths (files or directories) to `analyze-reify`. It will
+scan for `.clj` files and analyze them.
+
 ```
-$ find-reify-usage <path/to/clojure/src>
+$ analyze-reify <path/to/clojure/src>
 clojure.core.protocols/CollReduce
 clojure.core.protocols/CollReduce
 clojure.lang.IDeref
@@ -39,7 +45,7 @@ To get a sorted frequency list, you can combine this tool with
 [babashka](https://github.com/borkdude/babashka/):
 
 ```
-$ find-reify-usage <path/to/clojure/src> | bb -io '(->> *input* frequencies (sort-by second >))'
+$ analyze-reify <path/to/clojure/src> | bb -io '(->> *input* frequencies (sort-by second >))'
 [Specize 11]
 [Function 7]
 [clojure.lang.IDeref 6]

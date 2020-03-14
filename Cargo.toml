@@ -1,5 +1,5 @@
 [package]
-name = "find-reify-usage"
+name = "analyze-reify"
 version = "0.1.0"
 authors = ["Michiel Borkent <michielborkent@gmail.com>"]
 edition = "2018"
