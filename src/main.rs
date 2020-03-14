@@ -4,6 +4,7 @@ use std::env;
 use glob::glob;
 use std::fs::metadata;
 use rayon::prelude::*;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 extern "C" { fn tree_sitter_clojure() -> Language; }
 
@@ -59,18 +60,22 @@ fn paths_from_arg(arg: &String) -> glob::Paths {
 }
 
 fn main() {
-    for arg in env::args().skip(1) {
+    let args: Vec<String> = env::args().skip(1).collect();
+    let atomic_counter = AtomicUsize::new(0);
+    args.into_par_iter().for_each(|arg| {
         let paths: Vec<Result<PathBuf,_>> = paths_from_arg(&arg).collect();
         paths.into_par_iter().for_each(|entry| {
             match entry {
                 Ok(path) => {
                     let path = path.as_path();
                     if path.is_file() {
+                        atomic_counter.fetch_add(1, Ordering::Relaxed);
                         print_reify_usage_from_file_path(path);
                     }
                 },
                 Err(e) => panic!(format!("Unexpected error while analyzing {}", e))
             }
         });
-    }
+    });
+    eprintln!("\n=== Processed {} files ===", atomic_counter.load(Ordering::SeqCst))
 }
