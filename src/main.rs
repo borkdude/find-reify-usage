@@ -70,6 +70,8 @@ fn main() {
             match entry {
                 Ok(path) => {
                     let path = path.as_path();
+                    
+
                     if path.is_file() {
                         atomic_counter.fetch_add(1, Ordering::Relaxed);
                         print_reify_usage_from_file_path(path);
