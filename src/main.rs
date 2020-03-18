@@ -37,6 +37,24 @@ fn print_reify_usage_from_node(node: Node, bytes: &[u8]) {
     }
 }
 
+// references:
+// https://github.com/mvdnes/zip-rs/blob/master/examples/extract.rs
+// http://siciarz.net/24-days-rust-zip-and-lzma-compression/
+
+fn print_reify_usage_from_zipfile_path(path: &Path) {
+    println!("Processing zip: {:?}", path);
+    let file = std::fs::File::open(&path).unwrap();
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).unwrap();
+        let outpath = file.sanitized_name();
+        if (&*file.name()).ends_with(".clj") {
+            println!("Processing zip clj! {:?}", file.name());
+            std::fs::create_dir_all(&outpath).unwrap();
+        }
+    }
+}
+
 fn print_reify_usage_from_file_path(path: &Path) {
     let language: Language = unsafe { tree_sitter_clojure() };
     let mut parser = Parser::new();
@@ -53,7 +71,7 @@ fn paths_from_arg(arg: &String) -> glob::Paths {
     let md = metadata(arg).unwrap();
     let is_dir = md.is_dir();
     let pat = if is_dir {
-        String::from(arg) + "/**/*.clj"
+        String::from(arg) + "/**"
     } else {
         String::from(arg)
     };
@@ -70,11 +88,14 @@ fn main() {
             match entry {
                 Ok(path) => {
                     let path = path.as_path();
-                    
-
+                    println!("Processing path: {:?}, {:?}, {:?}", path, path.is_file(), path.extension().unwrap());
                     if path.is_file() {
-                        atomic_counter.fetch_add(1, Ordering::Relaxed);
-                        print_reify_usage_from_file_path(path);
+                        if path.extension().unwrap() == "clj" {
+                            atomic_counter.fetch_add(1, Ordering::Relaxed);
+                            print_reify_usage_from_file_path(path);
+                        } else if path.extension().unwrap() == "jar" {
+                            print_reify_usage_from_zipfile_path(path);
+                        }
                     }
                 },
                 Err(e) => panic!(format!("Unexpected error while analyzing {}", e))
