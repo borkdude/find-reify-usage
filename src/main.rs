@@ -7,6 +7,7 @@ use rayon::prelude::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime};
 use zip::read::{ZipFile};
+use std::sync::Mutex;
 
 extern "C" { fn tree_sitter_clojure() -> Language; }
 
@@ -38,6 +39,15 @@ fn print_reify_usage_from_node(node: Node, bytes: &[u8]) {
     }
 }
 
+fn print_reify_usage_from_bytes(bytes: &[u8]) {
+    let language: Language = unsafe { tree_sitter_clojure() };
+    let mut parser = Parser::new();
+    parser.set_language(language).unwrap();
+    let tree = parser.parse(&bytes, None).unwrap();
+    let root_node = tree.root_node();
+    print_reify_usage_from_node(root_node, &bytes);
+}
+
 fn print_reify_usage_from_file_path(path: &Path) {
     //println!("-- print_reify_usage_from_file -- Processing path: {:?}", path);
     let language: Language = unsafe { tree_sitter_clojure() };
@@ -62,7 +72,8 @@ trait ReadToString {
 impl ReadToString for ZipFile<'_> {
     fn read_to_string(&mut self, s: &mut String) {
         let outpath = self.sanitized_name();
-        //println!("OUTPATH: {:?}", outpath);
+        let outpath = std::path::PathBuf::from("/tmp/").join(outpath);
+        println!("OUTPATH: {:?}", outpath);
         let parent = outpath.parent().unwrap();
         std::fs::create_dir_all(&parent).unwrap(); // ah, this is a directory, now I get it!
         let mut outfile = std::fs::File::create(&outpath).unwrap(); // Err: is a directory
@@ -70,27 +81,32 @@ impl ReadToString for ZipFile<'_> {
         std::io::copy(self, &mut outfile).unwrap();
         let contents = std::fs::read_to_string(outpath.as_path()).unwrap();
         s.push_str(&contents);
+        //std::fs::remove_dir_all(&parent).unwrap();
     }
 }
 
 fn print_reify_usage_from_zipfile_path(path: &Path, atomic_counter: &AtomicUsize) {
     //println!("Processing zip: {:?}", path);
     let file = std::fs::File::open(&path).unwrap();
-    let mut archive = zip::ZipArchive::new(file).unwrap();
-    for i in 0..archive.len() {
+    let archive = zip::ZipArchive::new(file).unwrap();
+    let mutex = Mutex::new(archive);
+    let range = 0..mutex.lock().unwrap().len();
+    range.into_par_iter().for_each(|i| {
+        let mut archive = mutex.lock().unwrap();
         let mut file = archive.by_index(i).unwrap();
-        if (&*file.name()).ends_with(".clj") {
+        if (file.name()).ends_with(".clj") {
             let outpath = file.sanitized_name();
             if !(file.is_dir()) {
-                //println!("Processing zip clj! {:?}", file.name());
-                //println!("Data start:{:?}", file .data_start());
                 let mut contents = String::new();
                 file.read_to_string(&mut contents);
                 atomic_counter.fetch_add(1, Ordering::Relaxed);
-                print_reify_usage_from_file_path(&outpath);
+                println!("Analyzing:      {:?}", outpath);
+                let bytes = &contents.as_bytes();
+                print_reify_usage_from_bytes(&bytes);
+                println!("Done analyzing: {:?}", outpath);
             }
         }
-    }
+    });
 }
 
 fn paths_from_arg(arg: &String) -> glob::Paths {
