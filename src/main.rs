@@ -87,9 +87,14 @@ fn print_reify_usage_from_zipfile_path(path: &Path, app_cfg: &AppCfg) {
     let archive = zip::ZipArchive::new(file).unwrap();
     let mutex = Mutex::new(archive);
     let range = 0..mutex.lock().unwrap().len();
+    // to verify that we're actually doing work in all the threads
+    let mut active_threads = AtomicUsize::new(0);
     range.into_par_iter().for_each(|i| {
         let mut archive = mutex.lock().unwrap();
         let mut file = archive.by_index(i).unwrap();
+        let thread_count = active_threads.fetch_add(1,Ordering::Relaxed);
+        println!("active threads: {}", thread_count);
+        
         if file.is_file() && (file.name()).ends_with(".clj") {
             //let outpath = file.sanitized_name();
             let mut contents = String::new();
@@ -98,7 +103,13 @@ fn print_reify_usage_from_zipfile_path(path: &Path, app_cfg: &AppCfg) {
             let bytes = &contents.as_bytes();
             print_reify_usage_from_bytes(&bytes);
         }
+        let thread_count = active_threads.fetch_sub(1,Ordering::Relaxed);
+        println!("active threads: {}", thread_count);
+
     });
+
+    println!("active threads: {}", active_threads.get_mut());
+    println!("{}", rayon::current_num_threads());
 }
 
 fn print_reify_usage_from_dir(path: &Path, app_cfg: &AppCfg) {
