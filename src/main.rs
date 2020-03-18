@@ -6,6 +6,7 @@ use std::fs::metadata;
 use rayon::prelude::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime};
+use zip::read::{ZipFile};
 
 extern "C" { fn tree_sitter_clojure() -> Language; }
 
@@ -37,25 +38,8 @@ fn print_reify_usage_from_node(node: Node, bytes: &[u8]) {
     }
 }
 
-// references:
-// https://github.com/mvdnes/zip-rs/blob/master/examples/extract.rs
-// http://siciarz.net/24-days-rust-zip-and-lzma-compression/
-
-fn print_reify_usage_from_zipfile_path(path: &Path) {
-    println!("Processing zip: {:?}", path);
-    let file = std::fs::File::open(&path).unwrap();
-    let mut archive = zip::ZipArchive::new(file).unwrap();
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i).unwrap();
-        let outpath = file.sanitized_name();
-        if (&*file.name()).ends_with(".clj") {
-            println!("Processing zip clj! {:?}", file.name());
-            std::fs::create_dir_all(&outpath).unwrap();
-        }
-    }
-}
-
 fn print_reify_usage_from_file_path(path: &Path) {
+    println!("-- print_reify_usage_from_file -- Processing path: {:?}", path);
     let language: Language = unsafe { tree_sitter_clojure() };
     let mut parser = Parser::new();
     parser.set_language(language).unwrap();
@@ -65,6 +49,46 @@ fn print_reify_usage_from_file_path(path: &Path) {
     let tree = parser.parse(&bytes, None).unwrap();
     let root_node = tree.root_node();
     print_reify_usage_from_node(root_node, &bytes);
+}
+
+// references:
+// https://github.com/mvdnes/zip-rs/blob/master/examples/extract.rs
+// http://siciarz.net/24-days-rust-zip-and-lzma-compression/
+
+trait ReadToString {
+    fn read_to_string(&mut self, s: &mut String);
+}
+
+impl ReadToString for ZipFile<'_> {
+    fn read_to_string(&mut self, s: &mut String) {
+        let outpath = self.sanitized_name();
+        println!("Outpath: {:?}", outpath);
+        std::fs::create_dir_all(&outpath).unwrap();
+        let mut outfile = std::fs::File::create(&outpath).unwrap(); // Err: is a directory
+        std::io::copy(self, &mut outfile).unwrap();
+        let contents = std::fs::read_to_string(outpath.as_path()).unwrap();
+        s.push_str(&contents);
+    }
+}
+
+fn print_reify_usage_from_zipfile_path(path: &Path) {
+    println!("Processing zip: {:?}", path);
+    let file = std::fs::File::open(&path).unwrap();
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).unwrap();
+        if (&*file.name()).ends_with(".clj") {
+            let outpath = file.sanitized_name();
+            if !(file.is_dir()) {
+                println!("Processing zip clj! {:?}", file.name());
+                println!("Data start:{:?}", file .data_start());
+                let mut contents = String::new();
+                file.read_to_string(&mut contents);
+                print_reify_usage_from_file_path(&outpath);
+                std::fs::create_dir_all(&outpath).unwrap();
+            }
+        }
+    }
 }
 
 fn paths_from_arg(arg: &String) -> glob::Paths {
