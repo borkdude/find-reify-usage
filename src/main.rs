@@ -83,7 +83,6 @@ fn read_to_string(tmp_dir: &Path, f: &mut ZipFile, s: &mut String) {
 }
 
 fn print_reify_usage_from_zipfile_path(path: &Path, app_cfg: &AppCfg) {
-    //println!("Processing zip: {:?}", path);
     let file = std::fs::File::open(&path).unwrap();
     let archive = zip::ZipArchive::new(file).unwrap();
     let mutex = Mutex::new(archive);
@@ -96,10 +95,8 @@ fn print_reify_usage_from_zipfile_path(path: &Path, app_cfg: &AppCfg) {
             let mut contents = String::new();
             read_to_string(app_cfg.tmp_dir, &mut file, &mut contents);
             app_cfg.atomic_counter.fetch_add(1, Ordering::Relaxed);
-            //println!("Analyzing:      {:?}", outpath);
             let bytes = &contents.as_bytes();
             print_reify_usage_from_bytes(&bytes);
-            //println!("Done analyzing: {:?}", outpath);
         }
     });
 }
@@ -117,7 +114,6 @@ fn print_reify_usage_from_dir(path: &Path, app_cfg: &AppCfg) {
 
 
 fn print_reify_dispatch(path: &Path, app_cfg: &AppCfg) {
-    //println!("dispatch: {:?}", path);
     if path.is_dir() {
         print_reify_usage_from_dir(path, app_cfg);
         return;
@@ -136,7 +132,6 @@ fn print_reify_dispatch(path: &Path, app_cfg: &AppCfg) {
             }
         }
     }
-
 }
 
 fn main() {
@@ -157,6 +152,5 @@ fn main() {
     eprintln!("Processed {} files in {}ms. 😎"
               , atomic_counter.load(Ordering::SeqCst)
               , since_start.as_millis());
-    // eprintln!("Cleaning up {:?}", &tmp_dir);
     std::fs::remove_dir_all(&tmp_dir).unwrap();
 }
