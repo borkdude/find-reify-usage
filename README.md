@@ -58,8 +58,8 @@ $ cargo install --path .
 
 ## Usage
 
-Provide multiple paths (files or directories) to `analyze-reify`. It will
-scan for `.clj` files and analyze them.
+Provide one or multiple paths (files, directories or .jar files) to
+`analyze-reify`. It will scan for `.clj` files and analyze them.
 
 ```
 $ analyze-reify ~/git/clojure
