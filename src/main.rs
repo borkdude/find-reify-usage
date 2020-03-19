@@ -93,6 +93,7 @@ fn print_reify_usage_from_zipfile_path(path: &Path, app_cfg: &AppCfg) {
         if file.is_file() && (file.name()).ends_with(".clj") {
             let mut contents = vec![]; //String::new();
             file.read(&mut contents).unwrap();
+            println!("{}", String::from_utf8(contents.clone()).unwrap());
             //read_to_string(app_cfg.tmp_dir, &mut file, &mut contents);
             strings.push(contents);
         }
