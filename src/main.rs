@@ -2,19 +2,15 @@ use glob::glob;
 use rayon::prelude::*;
 use std::env;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime};
-use tempdir::TempDir;
 use tree_sitter::{Parser, Language, Node};
-use zip::read::{ZipFile};
 use std::io::Read;
 
 extern "C" { fn tree_sitter_clojure() -> Language; }
 
 struct AppCfg<'a> {
     atomic_counter: &'a AtomicUsize,
-    tmp_dir: &'a Path,
 }
 
 fn node_text<'a>(node: Node<'a>, bytes: &'a [u8]) -> &'a str {
@@ -72,39 +68,26 @@ fn print_reify_usage_from_file_path(path: &Path, app_cfg: &AppCfg) {
 // https://github.com/mvdnes/zip-rs/blob/master/examples/extract.rs
 // http://siciarz.net/24-days-rust-zip-and-lzma-compression/
 
-fn read_to_string(tmp_dir: &Path, f: &mut ZipFile, s: &mut String) {
-    let outpath = f.sanitized_name();
-    let outpath = tmp_dir.join(outpath);
-    let parent = outpath.parent().unwrap();
-    std::fs::create_dir_all(&parent).unwrap();
-    let mut outfile = std::fs::File::create(&outpath).unwrap();
-    std::io::copy(f, &mut outfile).unwrap();
-    let contents = std::fs::read_to_string(outpath.as_path()).unwrap();
-    s.push_str(&contents);
-}
-
 fn print_reify_usage_from_zipfile_path(path: &Path, app_cfg: &AppCfg) {
     let file = std::fs::File::open(&path).unwrap();
     let mut archive = zip::ZipArchive::new(file).unwrap();
     let range = 0..archive.len();
-    let mut strings: Vec<Vec<u8>> = vec![];
+    let mut strings: Vec<String> = vec![];
     range.for_each(|i| {
         let mut file = archive.by_index(i).unwrap();
         if file.is_file() && (file.name()).ends_with(".clj") {
-            let mut contents = vec![]; //String::new();
-            file.read(&mut contents).unwrap();
-            println!("{}", String::from_utf8(contents.clone()).unwrap());
-            //read_to_string(app_cfg.tmp_dir, &mut file, &mut contents);
+            let mut contents = String::new();
+            file.read_to_string(&mut contents).unwrap();
             strings.push(contents);
         }
     });
     // to verify that we're actually doing work in all the threads
     //let mut active_threads = AtomicUsize::new(0);
-    strings.into_par_iter().for_each(|bytes| {
+    strings.into_par_iter().for_each(|source| {
         //let thread_count = active_threads.fetch_add(1,Ordering::Relaxed);
         //println!("active threads: {}", thread_count);
         app_cfg.atomic_counter.fetch_add(1, Ordering::Relaxed);
-        print_reify_usage_from_bytes(&bytes);
+        print_reify_usage_from_bytes(source.as_bytes());
         //let thread_count = active_threads.fetch_sub(1,Ordering::Relaxed);
         //println!("active threads: {}", thread_count);
     });
@@ -149,9 +132,7 @@ fn main() {
     let start = SystemTime::now();
     let args: Vec<String> = env::args().skip(1).collect();
     let atomic_counter = AtomicUsize::new(0);
-    let tmp_dir = TempDir::new("analyze-reify").unwrap();
-    let tmp_dir = tmp_dir.path();
-    let app_cfg = AppCfg { atomic_counter: &atomic_counter, tmp_dir: &tmp_dir };
+    let app_cfg = AppCfg { atomic_counter: &atomic_counter, };
     let paths: Vec<&Path> = args.iter().map(|arg| {
         Path::new(arg)
     }).collect();
@@ -163,5 +144,4 @@ fn main() {
     eprintln!("Processed {} files in {}ms. 😎"
               , atomic_counter.load(Ordering::SeqCst)
               , since_start.as_millis());
-    std::fs::remove_dir_all(&tmp_dir).unwrap();
 }
