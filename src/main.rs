@@ -8,6 +8,7 @@ use std::time::{SystemTime};
 use tempdir::TempDir;
 use tree_sitter::{Parser, Language, Node};
 use zip::read::{ZipFile};
+use std::io::Read;
 
 extern "C" { fn tree_sitter_clojure() -> Language; }
 
@@ -86,22 +87,22 @@ fn print_reify_usage_from_zipfile_path(path: &Path, app_cfg: &AppCfg) {
     let file = std::fs::File::open(&path).unwrap();
     let mut archive = zip::ZipArchive::new(file).unwrap();
     let range = 0..archive.len();
-    let mut strings: Vec<String> = vec![];
+    let mut strings: Vec<Vec<u8>> = vec![];
     range.for_each(|i| {
         let mut file = archive.by_index(i).unwrap();
         if file.is_file() && (file.name()).ends_with(".clj") {
-            let mut contents = String::new();
-            read_to_string(app_cfg.tmp_dir, &mut file, &mut contents);
+            let mut contents = vec![]; //String::new();
+            file.read(&mut contents).unwrap();
+            //read_to_string(app_cfg.tmp_dir, &mut file, &mut contents);
             strings.push(contents);
         }
     });
     // to verify that we're actually doing work in all the threads
     //let mut active_threads = AtomicUsize::new(0);
-    strings.into_par_iter().for_each(|contents| {
+    strings.into_par_iter().for_each(|bytes| {
         //let thread_count = active_threads.fetch_add(1,Ordering::Relaxed);
         //println!("active threads: {}", thread_count);
         app_cfg.atomic_counter.fetch_add(1, Ordering::Relaxed);
-        let bytes = &contents.as_bytes();
         print_reify_usage_from_bytes(&bytes);
         //let thread_count = active_threads.fetch_sub(1,Ordering::Relaxed);
         //println!("active threads: {}", thread_count);
