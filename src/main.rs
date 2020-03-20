@@ -107,7 +107,10 @@ fn print_reify_usage_from_dir(path: &Path, app_cfg: &AppCfg) {
     let paths: Vec<Result<PathBuf,_>> = glob(&str).unwrap().collect();
     //println!("{:?}", paths);
     paths.into_par_iter().for_each(|path| {
-        print_reify_dispatch(path.unwrap().as_path(), app_cfg);
+        let the_path = path.unwrap();
+        if !the_path.is_dir() {
+            print_reify_dispatch(the_path.as_path(), app_cfg);
+        }
     });
 }
 
